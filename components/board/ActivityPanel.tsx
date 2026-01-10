@@ -47,9 +47,11 @@ function canUndo(type: string): boolean {
 export function ActivityPanel({
   boardId,
   refreshToken,
+  scrollAreaClassName,
 }: {
   boardId: string;
   refreshToken: number;
+  scrollAreaClassName?: string;
 }) {
   const [events, setEvents] = useState<ActivityEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -91,12 +93,13 @@ export function ActivityPanel({
   const rows = useMemo(() => events, [events]);
 
   return (
-    <aside aria-label="Activity" className="lg:sticky lg:top-6">
+    <section aria-label="Activity" className="w-full">
       <Panel className="p-4">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Activity</h2>
+          <h2 className="text-sm font-semibold text-foreground">Activity</h2>
           <Button
-            className="border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-900 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50 dark:hover:bg-zinc-900"
+            variant="secondary"
+            size="sm"
             onClick={() => {
               setLoading(true);
               void load();
@@ -107,17 +110,17 @@ export function ActivityPanel({
         </div>
 
         {error ? (
-          <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2 text-xs text-amber-900">
             {error}
           </div>
         ) : null}
 
         {loading ? (
-          <div className="mt-3 text-xs text-zinc-500">Loading…</div>
+          <div className="mt-3 text-xs text-(--muted)">Loading…</div>
         ) : (
-          <div className="mt-3 space-y-3">
+          <div className={"mt-3 space-y-3 " + (scrollAreaClassName ?? "")}>
             {rows.length === 0 ? (
-              <div className="text-xs text-zinc-500">No activity yet.</div>
+              <div className="text-xs text-(--muted)">No activity yet.</div>
             ) : null}
 
             {rows.map((evt) => {
@@ -128,18 +131,22 @@ export function ActivityPanel({
               });
 
               return (
-                <div key={evt.id} className="rounded-md border border-zinc-200 p-2 dark:border-zinc-800">
+                <div
+                  key={evt.id}
+                  className="rounded-xl border border-(--border) bg-(--surface-2)/70 p-2"
+                >
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <div className="text-xs font-medium text-zinc-900 dark:text-zinc-50">{label}</div>
-                      <div className="mt-0.5 text-[11px] text-zinc-500">
+                      <div className="text-xs font-medium text-foreground">{label}</div>
+                      <div className="mt-0.5 text-[11px] text-(--muted-2)">
                         {evt.actorName} • {time}
                       </div>
                     </div>
 
                     {canUndo(evt.type) ? (
                       <Button
-                        className="border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-900 hover:bg-zinc-50 disabled:hover:bg-white dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50 dark:hover:bg-zinc-900 dark:disabled:hover:bg-zinc-950"
+                        variant="secondary"
+                        size="sm"
                         disabled={undoingId === evt.id}
                         onClick={() => void undo(evt.id)}
                         title="Undo this change"
@@ -154,6 +161,6 @@ export function ActivityPanel({
           </div>
         )}
       </Panel>
-    </aside>
+    </section>
   );
 }

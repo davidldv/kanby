@@ -1,4 +1,4 @@
-Kanby is a collaborative Kanban board with realtime updates, an append-only activity log, and per-card undo.
+# Kanby is a collaborative Kanban board with realtime updates, an append-only activity log, and per-card undo
 
 ## Getting Started
 

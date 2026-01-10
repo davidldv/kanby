@@ -4,7 +4,9 @@ import Link from "next/link";
 import {
   closestCorners,
   DndContext,
+  DragOverlay,
   DragEndEvent,
+  DragStartEvent,
   KeyboardSensor,
   PointerSensor,
   useDroppable,
@@ -127,16 +129,16 @@ function SortableCard({
       {...attributes}
       {...listeners}
       className={
-        "w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-left text-sm shadow-sm hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 dark:border-zinc-800 dark:bg-zinc-950 dark:hover:bg-zinc-900 " +
-        (isDragging ? "opacity-60" : "")
+        "w-full cursor-grab touch-none rounded-xl border border-(--border) bg-(--surface-2) px-3 py-2 text-left text-sm shadow-[0_14px_44px_-36px_rgba(2,6,23,0.55)] transition-[transform,filter,opacity] hover:brightness-105 active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--ring) " +
+        (isDragging ? "opacity-30" : "")
       }
       aria-label={`Card: ${card.title}`}
     >
       <div className="flex items-start justify-between gap-2">
-        <div className="font-medium text-zinc-900 dark:text-zinc-50">{card.title}</div>
+        <div className="font-medium text-foreground">{card.title}</div>
       </div>
       {card.dueAt ? (
-        <div className="mt-1 text-xs text-zinc-500">Due {new Date(card.dueAt).toLocaleDateString()}</div>
+        <div className="mt-1 text-xs text-(--muted-2)">Due {new Date(card.dueAt).toLocaleDateString()}</div>
       ) : null}
     </button>
   );
@@ -147,6 +149,11 @@ export default function BoardClient({ boardId }: { boardId: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activityRefreshToken, setActivityRefreshToken] = useState(0);
+
+  const [activeCard, setActiveCard] = useState<{
+    card: ApiBoard["lists"][number]["cards"][number];
+    listId: string;
+  } | null>(null);
 
   const [actorName, setActorNameState] = useState<string>(getActorName());
 
@@ -185,7 +192,21 @@ export default function BoardClient({ boardId }: { boardId: string }) {
     return Object.values(state.cardsByList).flat().map((c) => c.id);
   }, [state]);
 
+  const handleDragStart = (event: DragStartEvent) => {
+    if (!state) return;
+
+    const activeId = String(event.active.id);
+    const activeData = event.active.data.current as { type?: string; listId?: string } | undefined;
+    if (activeData?.type !== "card" || !activeData.listId) return;
+
+    const listId = activeData.listId;
+    const card = (state.cardsByList[listId] ?? []).find((c) => c.id === activeId);
+    if (!card) return;
+    setActiveCard({ card, listId });
+  };
+
   const handleDragEnd = async (event: DragEndEvent) => {
+    setActiveCard(null);
     if (!state) return;
 
     const activeId = String(event.active.id);
@@ -283,9 +304,11 @@ export default function BoardClient({ boardId }: { boardId: string }) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-zinc-50 px-6 py-8 dark:bg-black">
+      <div className="min-h-screen px-6 py-8">
         <div className="mx-auto max-w-6xl">
-          <div className="text-sm text-zinc-500">Loading board…</div>
+          <Panel className="p-4">
+            <div className="text-sm text-(--muted)">Loading board…</div>
+          </Panel>
         </div>
       </div>
     );
@@ -293,14 +316,17 @@ export default function BoardClient({ boardId }: { boardId: string }) {
 
   if (!state) {
     return (
-      <div className="min-h-screen bg-zinc-50 px-6 py-8 dark:bg-black">
+      <div className="min-h-screen px-6 py-8">
         <div className="mx-auto max-w-3xl space-y-4">
-          <Link className="text-sm text-zinc-600 hover:underline" href="/">
+          <Link
+            className="text-sm text-(--muted) hover:text-foreground hover:underline"
+            href="/"
+          >
             ← Back
           </Link>
           <Panel className="p-4">
-            <div className="font-medium">Board not found</div>
-            {error ? <div className="mt-2 text-sm text-zinc-500">{error}</div> : null}
+            <div className="font-medium text-foreground">Board not found</div>
+            {error ? <div className="mt-2 text-sm text-(--muted)">{error}</div> : null}
           </Panel>
         </div>
       </div>
@@ -308,18 +334,21 @@ export default function BoardClient({ boardId }: { boardId: string }) {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-black">
-      <header className="border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+    <div className="min-h-screen">
+      <header className="sticky top-0 z-10 border-b border-(--border) bg-(--surface) backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-4">
           <div className="flex items-center gap-3">
-            <Link className="text-sm text-zinc-600 hover:underline" href="/">
+            <Link
+              className="text-sm text-(--muted) hover:text-foreground hover:underline"
+              href="/"
+            >
               Boards
             </Link>
-            <span className="text-zinc-300">/</span>
-            <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">{state.name}</h1>
+            <span className="text-(--muted-2)">/</span>
+            <h1 className="text-lg font-semibold text-foreground">{state.name}</h1>
           </div>
           <div className="flex items-center gap-2">
-            <label className="text-xs text-zinc-500" htmlFor="actorName">
+            <label className="text-xs text-(--muted)" htmlFor="actorName">
               Name
             </label>
             <Input
@@ -339,13 +368,19 @@ export default function BoardClient({ boardId }: { boardId: string }) {
 
       <main className="mx-auto max-w-6xl px-6 py-6">
         {error ? (
-          <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2 text-sm text-amber-900 shadow-[0_12px_40px_-28px_rgba(245,158,11,0.35)]">
             {error}
           </div>
         ) : null}
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
-          <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
+        <div className="space-y-6">
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCorners}
+            onDragStart={handleDragStart}
+            onDragCancel={() => setActiveCard(null)}
+            onDragEnd={handleDragEnd}
+          >
             <div className="flex gap-4 overflow-x-auto pb-4">
               {state.lists.map((list) => {
                 const cards = state.cardsByList[list.id] ?? [];
@@ -354,8 +389,10 @@ export default function BoardClient({ boardId }: { boardId: string }) {
                   <section key={list.id} className="w-72 shrink-0" aria-label={`List ${list.title}`}>
                     <Panel className="p-3">
                       <div className="mb-3 flex items-center justify-between" id={listDroppableId(list.id)}>
-                        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">{list.title}</h2>
-                        <span className="text-xs text-zinc-500">{cards.length}</span>
+                        <h2 className="text-sm font-semibold text-foreground">{list.title}</h2>
+                        <span className="inline-flex h-6 items-center rounded-full border border-(--border) bg-(--surface-2) px-2 text-xs text-(--muted)">
+                          {cards.length}
+                        </span>
                       </div>
 
                       <SortableContext items={cards.map((c) => c.id)} strategy={verticalListSortingStrategy}>
@@ -365,7 +402,7 @@ export default function BoardClient({ boardId }: { boardId: string }) {
                           ))}
                           {cards.length === 0 ? (
                             <div
-                              className="rounded-md border border-dashed border-zinc-200 px-3 py-6 text-center text-xs text-zinc-500 dark:border-zinc-800"
+                              className="rounded-xl border border-dashed border-(--border) bg-(--surface-2)/40 px-3 py-6 text-center text-xs text-(--muted)"
                               aria-hidden="true"
                             >
                               Drop a card here
@@ -382,14 +419,36 @@ export default function BoardClient({ boardId }: { boardId: string }) {
 
               <section className="w-72 shrink-0">
                 <Panel className="p-3">
-                  <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Add list</h2>
+                  <h2 className="text-sm font-semibold text-foreground">Add list</h2>
                   <CreateListForm onCreate={(title) => void createList(title)} />
                 </Panel>
               </section>
             </div>
+
+            <DragOverlay>
+              {activeCard ? (
+                <div
+                  className="w-66 rounded-xl border border-(--border) bg-(--surface-2) px-3 py-2 text-left text-sm shadow-[0_24px_70px_-42px_rgba(2,6,23,0.85)] ring-1 ring-(--ring)"
+                  aria-label={`Dragging card: ${activeCard.card.title}`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="font-medium text-foreground">{activeCard.card.title}</div>
+                  </div>
+                  {activeCard.card.dueAt ? (
+                    <div className="mt-1 text-xs text-(--muted-2)">
+                      Due {new Date(activeCard.card.dueAt).toLocaleDateString()}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </DragOverlay>
           </DndContext>
 
-          <ActivityPanel boardId={boardId} refreshToken={activityRefreshToken} />
+          <ActivityPanel
+            boardId={boardId}
+            refreshToken={activityRefreshToken}
+            scrollAreaClassName="max-h-72 overflow-y-auto pr-1"
+          />
         </div>
       </main>
 
@@ -414,7 +473,7 @@ function CreateListForm({ onCreate }: { onCreate: (title: string) => void }) {
       }}
     >
       <Input value={value} onChange={(e) => setValue(e.target.value)} placeholder="List title" />
-      <Button type="submit">Add</Button>
+      <Button type="submit" size="sm">Add</Button>
     </form>
   );
 }
@@ -433,7 +492,7 @@ function CreateCardForm({ onCreate }: { onCreate: (title: string) => void }) {
       }}
     >
       <Input value={value} onChange={(e) => setValue(e.target.value)} placeholder="Add a card" />
-      <Button type="submit">+</Button>
+      <Button type="submit" size="sm" className="w-9">+</Button>
     </form>
   );
 }

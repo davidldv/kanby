@@ -1,8 +1,23 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Cozy neutral + teal accent (light) */
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --muted: #475569;
+  --muted-2: #64748b;
+  --border: rgba(2, 6, 23, 0.12);
+  --surface: rgba(255, 255, 255, 0.72);
+  --surface-2: rgba(255, 255, 255, 0.9);
+  --ring: rgba(20, 184, 166, 0.35);
+  --accent: #0f766e;
+  --accent-2: #f59e0b;
+
+  /* Background art */
+  --bg-base: var(--background);
+  --bg-a: rgba(20, 184, 166, 0.16);
+  --bg-b: rgba(245, 158, 11, 0.16);
+  --bg-c: rgba(99, 102, 241, 0.10);
 }
 
 @theme inline {
@@ -14,13 +29,100 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    /* Cozy dark, still high-contrast */
+    --background: #07080c;
+    --foreground: #eef2ff;
+    --muted: rgba(226, 232, 240, 0.72);
+    --muted-2: rgba(226, 232, 240, 0.58);
+    --border: rgba(255, 255, 255, 0.10);
+    --surface: rgba(12, 14, 20, 0.70);
+    --surface-2: rgba(12, 14, 20, 0.92);
+    --ring: rgba(20, 184, 166, 0.40);
+    --accent: #14b8a6;
+    --accent-2: #fbbf24;
+
+    --bg-a: rgba(20, 184, 166, 0.14);
+    --bg-b: rgba(251, 191, 36, 0.10);
+    --bg-c: rgba(99, 102, 241, 0.10);
   }
 }
 
 body {
-  background: var(--background);
+  min-height: 100vh;
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica,
+    Arial, "Apple Color Emoji", "Segoe UI Emoji";
+
+  /* Cozy “studio” background with gentle gradients */
+  background-color: var(--bg-base);
+  background-image:
+    radial-gradient(1200px 800px at 10% -10%, var(--bg-a), transparent 60%),
+    radial-gradient(1000px 700px at 90% 0%, var(--bg-b), transparent 55%),
+    radial-gradient(900px 700px at 50% 110%, var(--bg-c), transparent 60%);
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: rgba(20, 184, 166, 0.25);
+}
+
+/* Subtle grain without images */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    0deg,
+    rgba(255, 255, 255, 0.015) 0px,
+    rgba(255, 255, 255, 0.015) 1px,
+    rgba(0, 0, 0, 0.015) 2px,
+    rgba(0, 0, 0, 0.015) 3px
+  );
+  opacity: 0.25;
+  mix-blend-mode: overlay;
+}
+
+/* Scrollbars (Firefox + WebKit). Keeps the horizontal list scroll tasteful. */
+html {
+  scrollbar-gutter: stable;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.35) transparent;
+}
+
+@media (prefers-color-scheme: dark) {
+  * {
+    scrollbar-color: rgba(226, 232, 240, 0.22) transparent;
+  }
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: rgba(148, 163, 184, 0.30);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  border-radius: 999px;
+}
+
+@media (prefers-color-scheme: dark) {
+  *::-webkit-scrollbar-thumb {
+    background-color: rgba(226, 232, 240, 0.20);
+  }
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(20, 184, 166, 0.35);
 }
