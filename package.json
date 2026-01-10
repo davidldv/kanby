@@ -7,11 +7,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "prisma:format": "prisma format",
-    "prisma:generate": "prisma generate",
-    "db:migrate": "prisma migrate dev",
-    "db:push": "prisma db push",
-    "db:studio": "prisma studio"
+    "prisma:format": "bunx --bun prisma format --config ./prisma.config.ts",
+    "prisma:generate": "bunx --bun prisma generate --config ./prisma.config.ts",
+    "db:migrate": "bunx --bun prisma migrate dev --config ./prisma.config.ts",
+    "db:push": "bunx --bun prisma db push --config ./prisma.config.ts",
+    "db:studio": "bunx --bun prisma studio --config ./prisma.config.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
