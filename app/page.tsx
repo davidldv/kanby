@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 
 import { Button } from "@/components/Button";
 import { Panel } from "@/components/Card";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Input } from "@/components/Input";
 import { apiFetch } from "@/lib/client/kanbyClient";
 
@@ -22,6 +23,12 @@ export default function Home() {
 
   const [newName, setNewName] = useState("");
 
+  const [editingBoardId, setEditingBoardId] = useState<string | null>(null);
+  const [editingBoardName, setEditingBoardName] = useState<string>("");
+  const [savingBoardId, setSavingBoardId] = useState<string | null>(null);
+  const [deleteDialog, setDeleteDialog] = useState<{ id: string; name: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
   const refresh = async () => {
     try {
       const data = await apiFetch<{ boards: BoardSummary[] }>("/api/boards");
@@ -37,6 +44,63 @@ export default function Home() {
   useEffect(() => {
     void refresh();
   }, []);
+
+  const startEditBoard = (b: BoardSummary) => {
+    setEditingBoardId(b.id);
+    setEditingBoardName(b.name);
+  };
+
+  const cancelEditBoard = () => {
+    setEditingBoardId(null);
+    setEditingBoardName("");
+  };
+
+  const saveBoardName = async () => {
+    if (!editingBoardId || savingBoardId) return;
+    const next = editingBoardName.trim();
+    if (!next) {
+      cancelEditBoard();
+      return;
+    }
+
+    const current = boards.find((b) => b.id === editingBoardId);
+    if (current && current.name === next) {
+      cancelEditBoard();
+      return;
+    }
+
+    setSavingBoardId(editingBoardId);
+    try {
+      await apiFetch(`/api/boards/${editingBoardId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ name: next }),
+      });
+      await refresh();
+      cancelEditBoard();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to rename board");
+    } finally {
+      setSavingBoardId(null);
+    }
+  };
+
+  const requestDeleteBoard = (b: BoardSummary) => {
+    setDeleteDialog({ id: b.id, name: b.name });
+  };
+
+  const confirmDeleteBoard = async () => {
+    if (!deleteDialog || deleting) return;
+    setDeleting(true);
+    try {
+      await apiFetch(`/api/boards/${deleteDialog.id}`, { method: "DELETE" });
+      await refresh();
+      setDeleteDialog(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to delete board");
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const createBoard = async () => {
     const name = newName.trim() || "My Board";
@@ -106,27 +170,88 @@ export default function Home() {
           {loading ? <div className="text-sm text-(--muted)">Loading…</div> : null}
 
           <div className="grid gap-3 sm:grid-cols-2">
-            {boards.map((b) => (
-              <Link
-                key={b.id}
-                href={`/boards/${b.id}`}
-                className="group rounded-xl border border-(--border) bg-(--surface) p-4 shadow-[0_18px_50px_-36px_rgba(2,6,23,0.45)] backdrop-blur transition hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--ring)"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="font-medium text-foreground">{b.name}</div>
-                  <span className="mt-0.5 inline-flex h-6 items-center rounded-full border border-(--border) bg-(--surface-2) px-2 text-[11px] text-(--muted)">
-                    Open
-                  </span>
+            {boards.map((b) => {
+              const isEditing = editingBoardId === b.id;
+              const isSaving = savingBoardId === b.id;
+
+              return (
+                <div
+                  key={b.id}
+                  className="group rounded-xl border border-(--border) bg-(--surface) p-4 shadow-[0_18px_50px_-36px_rgba(2,6,23,0.45)] backdrop-blur transition hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--ring)"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      {isEditing ? (
+                        <Input
+                          value={editingBoardName}
+                          onChange={(e) => setEditingBoardName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              void saveBoardName();
+                            }
+                            if (e.key === "Escape") {
+                              e.preventDefault();
+                              cancelEditBoard();
+                            }
+                          }}
+                          onBlur={() => void saveBoardName()}
+                          className="h-9 px-2 py-1 text-sm font-semibold"
+                          aria-label="Board name"
+                          autoFocus
+                        />
+                      ) : (
+                        <div
+                          className="truncate font-medium text-foreground cursor-text"
+                          onDoubleClick={() => startEditBoard(b)}
+                          title="Double-click to rename"
+                        >
+                          {b.name}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 rounded-md p-0 cursor-pointer"
+                        onClick={() => (isEditing ? cancelEditBoard() : startEditBoard(b))}
+                        title={isEditing ? "Cancel rename" : "Rename board"}
+                        aria-label={isEditing ? "Cancel rename" : "Rename board"}
+                        disabled={isSaving}
+                      >
+                        {isEditing ? "×" : "✎"}
+                      </Button>
+
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 rounded-md p-0 cursor-pointer"
+                        onClick={() => requestDeleteBoard(b)}
+                        title="Delete board"
+                        aria-label="Delete board"
+                      >
+                        🗑
+                      </Button>
+
+                      <Link
+                        href={`/boards/${b.id}`}
+                        className="mt-0.5 inline-flex h-6 items-center rounded-full border border-(--border) bg-(--surface-2) px-2 text-[11px] text-(--muted) hover:text-foreground"
+                      >
+                        Open
+                      </Link>
+                    </div>
+                  </div>
+
+                  <div className="mt-1 text-xs text-(--muted-2)">
+                    Updated {new Date(b.updatedAt).toLocaleString()}
+                  </div>
+                  <div className="mt-3 h-px w-full bg-(--border) opacity-60" />
+                  <div className="mt-3 text-xs text-(--muted)">Drag cards · See activity · Undo changes</div>
                 </div>
-                <div className="mt-1 text-xs text-(--muted-2)">
-                  Updated {new Date(b.updatedAt).toLocaleString()}
-                </div>
-                <div className="mt-3 h-px w-full bg-(--border) opacity-60" />
-                <div className="mt-3 text-xs text-(--muted)">
-                  Drag cards · See activity · Undo changes
-                </div>
-              </Link>
-            ))}
+              );
+            })}
             {!loading && boards.length === 0 ? (
               <Panel className="p-5 sm:col-span-2">
                 <div className="text-sm font-medium text-foreground">No boards yet</div>
@@ -140,6 +265,21 @@ export default function Home() {
           Built with Next.js + Prisma + SSE.
         </footer>
       </div>
+
+      <ConfirmDialog
+        open={!!deleteDialog}
+        title="Delete board?"
+        description={
+          deleteDialog
+            ? `“${deleteDialog.name}” will be removed along with its lists and tasks.`
+            : undefined
+        }
+        confirmLabel="Delete board"
+        cancelLabel="Cancel"
+        confirming={deleting}
+        onCancel={() => (deleting ? null : setDeleteDialog(null))}
+        onConfirm={() => void confirmDeleteBoard()}
+      />
     </div>
   );
 }

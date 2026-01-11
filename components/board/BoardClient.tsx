@@ -132,7 +132,7 @@ function SortableCard({
       {...attributes}
       {...listeners}
       className={
-        "group w-full cursor-grab touch-none rounded-xl border border-(--border) bg-(--surface-2) px-3 py-2 text-left text-sm shadow-[0_14px_44px_-36px_rgba(2,6,23,0.55)] transition-[transform,filter,opacity] hover:brightness-105 active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--ring) " +
+        "group w-full cursor-grab touch-none rounded-xl border border-(--border) bg-(--surface-2) px-3 py-2 text-left text-sm shadow-[0_14px_44px_-36px_rgba(2,6,23,0.55)] transition-[transform,filter,opacity,box-shadow] hover:-translate-y-px hover:shadow-[0_22px_64px_-46px_rgba(2,6,23,0.75)] hover:brightness-105 active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--ring) " +
         (isDragging ? "opacity-30" : "")
       }
       aria-label={`Card: ${card.title}`}
@@ -170,6 +170,12 @@ export default function BoardClient({ boardId }: { boardId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [activityRefreshToken, setActivityRefreshToken] = useState(0);
 
+  const [isEditingBoardName, setIsEditingBoardName] = useState(false);
+  const [editingBoardName, setEditingBoardName] = useState<string>("");
+  const [savingBoardName, setSavingBoardName] = useState(false);
+  const [boardDeleteOpen, setBoardDeleteOpen] = useState(false);
+  const [deletingBoard, setDeletingBoard] = useState(false);
+
   const [activeCard, setActiveCard] = useState<{
     card: ApiBoard["lists"][number]["cards"][number];
     listId: string;
@@ -177,6 +183,15 @@ export default function BoardClient({ boardId }: { boardId: string }) {
 
   const [deleteDialog, setDeleteDialog] = useState<{ id: string; title: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  const [editingListId, setEditingListId] = useState<string | null>(null);
+  const [editingListTitle, setEditingListTitle] = useState<string>("");
+  const [listDeleteDialog, setListDeleteDialog] = useState<{
+    id: string;
+    title: string;
+    cardCount: number;
+  } | null>(null);
+  const [deletingList, setDeletingList] = useState(false);
 
   const [actorName, setActorNameState] = useState<string>(getActorName());
 
@@ -193,7 +208,12 @@ export default function BoardClient({ boardId }: { boardId: string }) {
       setState(normalizeBoard(data.board));
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load board");
+      const message = e instanceof Error ? e.message : "Failed to load board";
+      // If the board was deleted (or never existed), show the not-found state.
+      if (typeof message === "string" && message.includes("API 404:")) {
+        setState(null);
+      }
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -209,6 +229,59 @@ export default function BoardClient({ boardId }: { boardId: string }) {
     void refresh();
     setActivityRefreshToken((t) => t + 1);
   });
+
+  const startEditBoardName = () => {
+    if (!state) return;
+    setEditingBoardName(state.name);
+    setIsEditingBoardName(true);
+  };
+
+  const cancelEditBoardName = () => {
+    setIsEditingBoardName(false);
+    setEditingBoardName("");
+  };
+
+  const saveBoardName = async () => {
+    if (!state || savingBoardName) return;
+    const next = editingBoardName.trim();
+    if (!next) {
+      cancelEditBoardName();
+      return;
+    }
+
+    if (next === state.name) {
+      cancelEditBoardName();
+      return;
+    }
+
+    setSavingBoardName(true);
+    try {
+      await apiFetch<{ board: { id: string; name: string } }>(`/api/boards/${boardId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ name: next }),
+      });
+      setState({ ...state, name: next });
+      cancelEditBoardName();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to rename board");
+    } finally {
+      setSavingBoardName(false);
+    }
+  };
+
+  const confirmDeleteBoard = async () => {
+    if (deletingBoard) return;
+    setDeletingBoard(true);
+    try {
+      await apiFetch(`/api/boards/${boardId}`, { method: "DELETE" });
+      window.location.href = "/";
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to delete board");
+    } finally {
+      setDeletingBoard(false);
+      setBoardDeleteOpen(false);
+    }
+  };
 
   const allCardIds = useMemo(() => {
     if (!state) return [];
@@ -341,6 +414,45 @@ export default function BoardClient({ boardId }: { boardId: string }) {
     }
   };
 
+  const startEditList = (listId: string, title: string) => {
+    setEditingListId(listId);
+    setEditingListTitle(title);
+  };
+
+  const cancelEditList = () => {
+    setEditingListId(null);
+    setEditingListTitle("");
+  };
+
+  const saveListTitle = async () => {
+    if (!editingListId) return;
+    const title = editingListTitle.trim();
+    if (!title) return;
+    await apiFetch(`/api/boards/${boardId}/lists/${editingListId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ title }),
+    });
+    cancelEditList();
+    await refresh();
+  };
+
+  const requestDeleteList = (listId: string, title: string, cardCount: number) => {
+    setListDeleteDialog({ id: listId, title, cardCount });
+  };
+
+  const confirmDeleteList = async () => {
+    if (!listDeleteDialog) return;
+    setDeletingList(true);
+    try {
+      await apiFetch(`/api/boards/${boardId}/lists/${listDeleteDialog.id}`, { method: "DELETE" });
+      await refresh();
+    } finally {
+      setDeletingList(false);
+      setListDeleteDialog(null);
+      if (editingListId === listDeleteDialog?.id) cancelEditList();
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen px-6 py-8">
@@ -384,7 +496,60 @@ export default function BoardClient({ boardId }: { boardId: string }) {
               Boards
             </Link>
             <span className="text-(--muted-2)">/</span>
-            <h1 className="text-lg font-semibold text-foreground">{state.name}</h1>
+
+            {isEditingBoardName ? (
+              <Input
+                value={editingBoardName}
+                onChange={(e) => setEditingBoardName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void saveBoardName();
+                  }
+                  if (e.key === "Escape") {
+                    e.preventDefault();
+                    cancelEditBoardName();
+                  }
+                }}
+                onBlur={() => void saveBoardName()}
+                className="h-8 w-56 px-2 py-1 text-sm font-semibold"
+                aria-label="Board name"
+                autoFocus
+              />
+            ) : (
+              <h1
+                className="text-lg font-semibold text-foreground cursor-text"
+                onDoubleClick={startEditBoardName}
+                title="Double-click to rename"
+              >
+                {state.name}
+              </h1>
+            )}
+
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 rounded-md p-0 cursor-pointer"
+                onClick={() => (isEditingBoardName ? cancelEditBoardName() : startEditBoardName())}
+                title={isEditingBoardName ? "Cancel rename" : "Rename board"}
+                aria-label={isEditingBoardName ? "Cancel rename" : "Rename board"}
+                disabled={savingBoardName}
+              >
+                {isEditingBoardName ? "×" : "✎"}
+              </Button>
+
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 rounded-md p-0 cursor-pointer"
+                onClick={() => setBoardDeleteOpen(true)}
+                title="Delete board"
+                aria-label="Delete board"
+              >
+                🗑
+              </Button>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <label className="text-xs text-(--muted)" htmlFor="actorName">
@@ -423,15 +588,78 @@ export default function BoardClient({ boardId }: { boardId: string }) {
             <div className="flex gap-4 overflow-x-auto pb-4">
               {state.lists.map((list) => {
                 const cards = state.cardsByList[list.id] ?? [];
+                const isEditing = editingListId === list.id;
 
                 return (
                   <section key={list.id} className="w-72 shrink-0" aria-label={`List ${list.title}`}>
-                    <Panel className="p-3">
-                      <div className="mb-3 flex items-center justify-between" id={listDroppableId(list.id)}>
-                        <h2 className="text-sm font-semibold text-foreground">{list.title}</h2>
-                        <span className="inline-flex h-6 items-center rounded-full border border-(--border) bg-(--surface-2) px-2 text-xs text-(--muted)">
-                          {cards.length}
-                        </span>
+                    <Panel className="relative overflow-hidden p-3 transition-shadow hover:shadow-[0_22px_64px_-46px_rgba(2,6,23,0.55)]">
+                      <div
+                        aria-hidden="true"
+                        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-(--accent)/45 to-transparent"
+                      />
+
+                      <div className="mb-3 flex items-center justify-between gap-2" id={listDroppableId(list.id)}>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                          <span className="h-2 w-2 rounded-full bg-(--accent)/90 shadow-[0_0_0_4px_rgba(20,184,166,0.12)]" />
+                          {isEditing ? (
+                            <Input
+                              value={editingListTitle}
+                              onChange={(e) => setEditingListTitle(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  void saveListTitle();
+                                }
+                                if (e.key === "Escape") {
+                                  e.preventDefault();
+                                  cancelEditList();
+                                }
+                              }}
+                              onBlur={() => void saveListTitle()}
+                              className="h-8 px-2 py-1 text-sm font-semibold"
+                              aria-label="List title"
+                              autoFocus
+                            />
+                          ) : (
+                            <h2
+                              className="truncate text-sm font-semibold text-foreground cursor-text"
+                              onDoubleClick={() => startEditList(list.id, list.title)}
+                              title="Double-click to rename"
+                            >
+                              {list.title}
+                            </h2>
+                          )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                          <span className="inline-flex h-6 items-center rounded-full border border-(--border) bg-(--surface-2) px-2 text-xs text-(--muted)">
+                            {cards.length}
+                          </span>
+
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 rounded-md p-0 cursor-pointer"
+                            onClick={() => (isEditing ? cancelEditList() : startEditList(list.id, list.title))}
+                            title={isEditing ? "Cancel rename" : "Rename list"}
+                            aria-label={isEditing ? "Cancel rename" : "Rename list"}
+                          >
+                            {isEditing ? "×" : "✎"}
+                          </Button>
+
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 rounded-md p-0 cursor-pointer"
+                            onClick={() => requestDeleteList(list.id, list.title, cards.length)}
+                            title="Delete list"
+                            aria-label="Delete list"
+                          >
+                            🗑
+                          </Button>
+                        </div>
                       </div>
 
                       <SortableContext items={cards.map((c) => c.id)} strategy={verticalListSortingStrategy}>
@@ -446,7 +674,7 @@ export default function BoardClient({ boardId }: { boardId: string }) {
                           ))}
                           {cards.length === 0 ? (
                             <div
-                              className="rounded-xl border border-dashed border-(--border) bg-(--surface-2)/40 px-3 py-6 text-center text-xs text-(--muted)"
+                              className="rounded-xl border border-dashed border-(--border) bg-(--surface-2)/35 px-3 py-7 text-center text-xs text-(--muted)"
                               aria-hidden="true"
                             >
                               Drop a card here
@@ -462,8 +690,17 @@ export default function BoardClient({ boardId }: { boardId: string }) {
               })}
 
               <section className="w-72 shrink-0">
-                <Panel className="p-3">
-                  <h2 className="text-sm font-semibold text-foreground">Add list</h2>
+                <Panel className="relative overflow-hidden p-3 transition-shadow hover:shadow-[0_22px_64px_-46px_rgba(2,6,23,0.45)] border-dashed">
+                  <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-(--accent-2)/40 to-transparent"
+                  />
+                  <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                    <span className="inline-flex h-6 w-6 items-center justify-center rounded-lg border border-(--border) bg-(--surface-2) text-sm text-foreground">
+                      +
+                    </span>
+                    Add list
+                  </h2>
                   <CreateListForm onCreate={(title) => void createList(title)} />
                 </Panel>
               </section>
@@ -509,6 +746,32 @@ export default function BoardClient({ boardId }: { boardId: string }) {
         confirming={deleting}
         onCancel={() => (deleting ? null : setDeleteDialog(null))}
         onConfirm={() => void confirmDeleteCard()}
+      />
+
+      <ConfirmDialog
+        open={!!listDeleteDialog}
+        title="Delete list?"
+        description={
+          listDeleteDialog
+            ? `“${listDeleteDialog.title}” and ${listDeleteDialog.cardCount} task(s) will be removed.`
+            : undefined
+        }
+        confirmLabel="Delete list"
+        cancelLabel="Cancel"
+        confirming={deletingList}
+        onCancel={() => (deletingList ? null : setListDeleteDialog(null))}
+        onConfirm={() => void confirmDeleteList()}
+      />
+
+      <ConfirmDialog
+        open={boardDeleteOpen}
+        title="Delete board?"
+        description="This will remove the board and all its lists and tasks."
+        confirmLabel="Delete board"
+        cancelLabel="Cancel"
+        confirming={deletingBoard}
+        onCancel={() => (deletingBoard ? null : setBoardDeleteOpen(false))}
+        onConfirm={() => void confirmDeleteBoard()}
       />
 
       <div className="sr-only" aria-hidden="true">

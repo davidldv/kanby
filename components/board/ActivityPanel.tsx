@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/Button";
 import { Panel } from "@/components/Card";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { apiFetch } from "@/lib/client/kanbyClient";
 
 type ActivityEvent = {
@@ -25,8 +26,14 @@ function formatEventType(type: string): string {
       return "Board created";
     case "board.renamed":
       return "Board renamed";
+    case "board.deleted":
+      return "Board deleted";
     case "list.created":
       return "List created";
+    case "list.renamed":
+      return "List renamed";
+    case "list.deleted":
+      return "List deleted";
     case "card.created":
       return "Card created";
     case "card.updated":
@@ -65,6 +72,8 @@ export function ActivityPanel({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [undoingId, setUndoingId] = useState<string | null>(null);
+  const [clearOpen, setClearOpen] = useState(false);
+  const [clearing, setClearing] = useState(false);
 
   const load = async () => {
     try {
@@ -98,7 +107,22 @@ export function ActivityPanel({
     }
   };
 
+  const clear = async () => {
+    setClearing(true);
+    try {
+      await apiFetch(`/api/boards/${boardId}/activity/clear`, { method: "POST" });
+      // The server will now filter older events for this client.
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to clear activity");
+    } finally {
+      setClearing(false);
+      setClearOpen(false);
+    }
+  };
+
   const rows = useMemo(() => events, [events]);
+  const hasEvents = rows.length > 0;
 
   const undoneIds = useMemo(() => {
     const ids = new Set<string>();
@@ -115,17 +139,29 @@ export function ActivityPanel({
       <Panel className="p-4">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-foreground">Activity</h2>
-          <Button
-            variant="secondary"
-            size="sm"
-            className="cursor-pointer"
-            onClick={() => {
-              setLoading(true);
-              void load();
-            }}
-          >
-            Refresh
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              className="cursor-pointer"
+              onClick={() => {
+                setLoading(true);
+                void load();
+              }}
+            >
+              Refresh
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              className="cursor-pointer"
+              disabled={loading || clearing || !hasEvents}
+              onClick={() => setClearOpen(true)}
+              title={hasEvents ? "Clear activity" : "Nothing to clear"}
+            >
+              Clear
+            </Button>
+          </div>
         </div>
 
         {error ? (
@@ -183,6 +219,17 @@ export function ActivityPanel({
           </div>
         )}
       </Panel>
+
+      <ConfirmDialog
+        open={clearOpen}
+        title="Clear activity?"
+        description="This clears the activity feed for you on this device. New actions will appear again as they happen."
+        confirmLabel="Clear activity"
+        cancelLabel="Cancel"
+        confirming={clearing}
+        onCancel={() => (clearing ? null : setClearOpen(false))}
+        onConfirm={() => void clear()}
+      />
     </section>
   );
 }
