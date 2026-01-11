@@ -54,11 +54,6 @@ export default function Home() {
     <div className="min-h-screen px-6 py-10">
       <div className="mx-auto max-w-4xl space-y-8">
         <header className="space-y-4">
-          <div className="inline-flex items-center gap-2 rounded-full border border-(--border) bg-(--surface) px-3 py-1 text-xs text-(--muted) shadow-[0_10px_30px_-26px_rgba(2,6,23,0.35)]">
-            <span className="h-1.5 w-1.5 rounded-full bg-(--accent)" />
-            Realtime Kanban · Audit log · Undo
-          </div>
-
           <div>
             <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
               Kanby
@@ -67,7 +62,7 @@ export default function Home() {
               </span>
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-(--muted)">
-              Cozy, production-minded Kanban with live updates, an append-only activity timeline, and per-card undo.
+              Cozy Kanban with live updates, an activity timeline, and undo per card.
             </p>
           </div>
         </header>
@@ -85,10 +80,10 @@ export default function Home() {
                 id="boardName"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
-                placeholder="e.g. Portfolio Sprint"
+                placeholder="e.g. Project Sprint"
               />
             </div>
-            <Button onClick={() => void createBoard()} className="shadow-[0_18px_50px_-30px_rgba(20,184,166,0.8)]">
+            <Button onClick={() => void createBoard()} className="cursor-pointer shadow-[0_18px_50px_-30px_rgba(20,184,166,0.8)]">
               Create board
             </Button>
           </div>

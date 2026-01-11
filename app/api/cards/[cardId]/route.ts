@@ -110,3 +110,66 @@ export async function PATCH(req: Request, ctx: { params: Promise<unknown> }) {
   if (actor.setClientIdHeader) res.headers.set("x-client-id", actor.setClientIdHeader);
   return res;
 }
+
+export async function DELETE(req: Request, ctx: { params: Promise<unknown> }) {
+  const params = ParamsSchema.safeParse(await ctx.params);
+  if (!params.success) return jsonError("Invalid card id", 400);
+
+  // eslint-disable-next-line @typescript-eslint/consistent-type-imports
+  const actor = getActor(req as unknown as import("next/server").NextRequest);
+
+  const result = await prisma.$transaction(async (tx) => {
+    const before = await tx.card.findUnique({
+      where: { id: params.data.cardId },
+      select: {
+        id: true,
+        boardId: true,
+        listId: true,
+        title: true,
+        description: true,
+        dueAt: true,
+        position: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    if (!before) return { notFound: true as const };
+
+    await tx.card.delete({ where: { id: before.id }, select: { id: true } });
+
+    await tx.activityEvent.create({
+      data: {
+        boardId: before.boardId,
+        entityType: "CARD",
+        entityId: before.id,
+        type: "card.deleted",
+        actorUserId: actor.actorUserId ?? null,
+        actorName: actor.actorName,
+        actorClientId: actor.actorClientId,
+        data: { before, after: null },
+      },
+    });
+
+    await tx.board.update({
+      where: { id: before.boardId },
+      data: { updatedAt: new Date() },
+      select: { id: true },
+    });
+
+    return { deleted: true as const, cardId: before.id, boardId: before.boardId };
+  });
+
+  if ((result as { notFound?: boolean }).notFound) return jsonError("Card not found", 404);
+
+  if ((result as { boardId?: string }).boardId) {
+    publishBoardEvent((result as { boardId: string }).boardId, "board.changed", {
+      reason: "card.deleted",
+      cardId: params.data.cardId,
+    });
+  }
+
+  const res = jsonOk(result);
+  if (actor.setClientIdHeader) res.headers.set("x-client-id", actor.setClientIdHeader);
+  return res;
+}

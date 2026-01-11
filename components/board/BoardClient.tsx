@@ -28,6 +28,7 @@ import { Input } from "@/components/Input";
 import { Panel } from "@/components/Card";
 import { apiFetch, getActorName, setActorName } from "@/lib/client/kanbyClient";
 import { ActivityPanel } from "@/components/board/ActivityPanel";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 type ApiBoard = {
   id: string;
@@ -105,9 +106,11 @@ function ListDropZone({ listId, children }: { listId: string; children: React.Re
 function SortableCard({
   card,
   listId,
+  onDelete,
 }: {
   card: ApiBoard["lists"][number]["cards"][number];
   listId: string;
+  onDelete: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: card.id,
@@ -123,24 +126,41 @@ function SortableCard({
   };
 
   return (
-    <button
+    <div
       ref={setNodeRef}
       style={style}
       {...attributes}
       {...listeners}
       className={
-        "w-full cursor-grab touch-none rounded-xl border border-(--border) bg-(--surface-2) px-3 py-2 text-left text-sm shadow-[0_14px_44px_-36px_rgba(2,6,23,0.55)] transition-[transform,filter,opacity] hover:brightness-105 active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--ring) " +
+        "group w-full cursor-grab touch-none rounded-xl border border-(--border) bg-(--surface-2) px-3 py-2 text-left text-sm shadow-[0_14px_44px_-36px_rgba(2,6,23,0.55)] transition-[transform,filter,opacity] hover:brightness-105 active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--ring) " +
         (isDragging ? "opacity-30" : "")
       }
       aria-label={`Card: ${card.title}`}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="font-medium text-foreground">{card.title}</div>
+
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 w-7 rounded-md p-0 opacity-0 transition-opacity group-hover:opacity-100 cursor-pointer"
+          onPointerDown={(e) => {
+            e.stopPropagation();
+          }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+          title="Delete task"
+          aria-label="Delete task"
+        >
+          ×
+        </Button>
       </div>
       {card.dueAt ? (
         <div className="mt-1 text-xs text-(--muted-2)">Due {new Date(card.dueAt).toLocaleDateString()}</div>
       ) : null}
-    </button>
+    </div>
   );
 }
 
@@ -154,6 +174,9 @@ export default function BoardClient({ boardId }: { boardId: string }) {
     card: ApiBoard["lists"][number]["cards"][number];
     listId: string;
   } | null>(null);
+
+  const [deleteDialog, setDeleteDialog] = useState<{ id: string; title: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const [actorName, setActorNameState] = useState<string>(getActorName());
 
@@ -302,6 +325,22 @@ export default function BoardClient({ boardId }: { boardId: string }) {
     await refresh();
   };
 
+  const requestDeleteCard = (cardId: string, title: string) => {
+    setDeleteDialog({ id: cardId, title });
+  };
+
+  const confirmDeleteCard = async () => {
+    if (!deleteDialog) return;
+    setDeleting(true);
+    try {
+      await apiFetch(`/api/cards/${deleteDialog.id}`, { method: "DELETE" });
+      await refresh();
+    } finally {
+      setDeleting(false);
+      setDeleteDialog(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen px-6 py-8">
@@ -398,7 +437,12 @@ export default function BoardClient({ boardId }: { boardId: string }) {
                       <SortableContext items={cards.map((c) => c.id)} strategy={verticalListSortingStrategy}>
                         <ListDropZone listId={list.id}>
                           {cards.map((card) => (
-                            <SortableCard key={card.id} card={card} listId={list.id} />
+                            <SortableCard
+                              key={card.id}
+                              card={card}
+                              listId={list.id}
+                              onDelete={() => requestDeleteCard(card.id, card.title)}
+                            />
                           ))}
                           {cards.length === 0 ? (
                             <div
@@ -452,6 +496,21 @@ export default function BoardClient({ boardId }: { boardId: string }) {
         </div>
       </main>
 
+      <ConfirmDialog
+        open={!!deleteDialog}
+        title="Delete task?"
+        description={
+          deleteDialog
+            ? `“${deleteDialog.title}” will be removed. You can restore it from Activity.`
+            : undefined
+        }
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        confirming={deleting}
+        onCancel={() => (deleting ? null : setDeleteDialog(null))}
+        onConfirm={() => void confirmDeleteCard()}
+      />
+
       <div className="sr-only" aria-hidden="true">
         {allCardIds.length}
       </div>
@@ -473,7 +532,7 @@ function CreateListForm({ onCreate }: { onCreate: (title: string) => void }) {
       }}
     >
       <Input value={value} onChange={(e) => setValue(e.target.value)} placeholder="List title" />
-      <Button type="submit" size="sm">Add</Button>
+      <Button type="submit" className="cursor-pointer" size="sm">Add</Button>
     </form>
   );
 }
@@ -492,7 +551,7 @@ function CreateCardForm({ onCreate }: { onCreate: (title: string) => void }) {
       }}
     >
       <Input value={value} onChange={(e) => setValue(e.target.value)} placeholder="Add a card" />
-      <Button type="submit" size="sm" className="w-9">+</Button>
+      <Button type="submit" size="sm" className="w-9 cursor-pointer">+</Button>
     </form>
   );
 }

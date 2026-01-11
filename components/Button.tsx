@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes } from "react";
+import { forwardRef, type ButtonHTMLAttributes } from "react";
 
 type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
 type ButtonSize = "sm" | "md" | "lg";
@@ -8,7 +8,10 @@ type Props = ButtonHTMLAttributes<HTMLButtonElement> & {
   size?: ButtonSize;
 };
 
-export function Button({ className = "", variant = "primary", size = "md", ...props }: Props) {
+export const Button = forwardRef<HTMLButtonElement, Props>(function Button(
+  { className = "", variant = "primary", size = "md", ...props },
+  ref,
+) {
   const sizeClass =
     size === "sm"
       ? "h-8 px-2.5 text-xs"
@@ -28,6 +31,7 @@ export function Button({ className = "", variant = "primary", size = "md", ...pr
   return (
     <button
       {...props}
+      ref={ref}
       className={
         "inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-[transform,filter,background-color,box-shadow] active:translate-y-[0.5px] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--ring) " +
         sizeClass +
@@ -38,4 +42,4 @@ export function Button({ className = "", variant = "primary", size = "md", ...pr
       }
     />
   );
-}
+});

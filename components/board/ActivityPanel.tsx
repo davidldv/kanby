@@ -33,6 +33,8 @@ function formatEventType(type: string): string {
       return "Card updated";
     case "card.moved":
       return "Card moved";
+    case "card.deleted":
+      return "Card deleted";
     case "card.undone":
       return "Undo";
     default:
@@ -41,7 +43,13 @@ function formatEventType(type: string): string {
 }
 
 function canUndo(type: string): boolean {
-  return type === "card.created" || type === "card.updated" || type === "card.moved";
+  return type === "card.created" || type === "card.updated" || type === "card.moved" || type === "card.deleted";
+}
+
+function getRevertedEventId(data: unknown): string | null {
+  if (!data || typeof data !== "object") return null;
+  const v = data as Record<string, unknown>;
+  return typeof v.revertedEventId === "string" ? v.revertedEventId : null;
 }
 
 export function ActivityPanel({
@@ -92,6 +100,16 @@ export function ActivityPanel({
 
   const rows = useMemo(() => events, [events]);
 
+  const undoneIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const evt of events) {
+      if (evt.type !== "card.undone") continue;
+      const reverted = getRevertedEventId(evt.data);
+      if (reverted) ids.add(reverted);
+    }
+    return ids;
+  }, [events]);
+
   return (
     <section aria-label="Activity" className="w-full">
       <Panel className="p-4">
@@ -100,6 +118,7 @@ export function ActivityPanel({
           <Button
             variant="secondary"
             size="sm"
+            className="cursor-pointer"
             onClick={() => {
               setLoading(true);
               void load();
@@ -130,6 +149,8 @@ export function ActivityPanel({
                 minute: "2-digit",
               });
 
+              const isUndone = undoneIds.has(evt.id);
+
               return (
                 <div
                   key={evt.id}
@@ -147,11 +168,12 @@ export function ActivityPanel({
                       <Button
                         variant="secondary"
                         size="sm"
-                        disabled={undoingId === evt.id}
+                        className="cursor-pointer"
+                        disabled={undoingId === evt.id || isUndone}
                         onClick={() => void undo(evt.id)}
                         title="Undo this change"
                       >
-                        Undo
+                        {isUndone ? "Undone" : "Undo"}
                       </Button>
                     ) : null}
                   </div>

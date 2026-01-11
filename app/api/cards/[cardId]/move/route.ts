@@ -35,7 +35,12 @@ export async function POST(req: Request, ctx: { params: Promise<unknown> }) {
 
     if (!card) return { notFound: true as const };
 
-    const before = { listId: card.listId, position: card.position };
+    const before = {
+      id: card.id,
+      boardId: card.boardId,
+      listId: card.listId,
+      position: card.position,
+    };
 
     const beforeNeighbor = parsed.data.beforeCardId
       ? await tx.card.findUnique({
@@ -101,7 +106,12 @@ export async function POST(req: Request, ctx: { params: Promise<unknown> }) {
         actorClientId: actor.actorClientId,
         data: {
           before,
-          after: { listId: updated.listId, position: updated.position },
+          after: {
+            id: updated.id,
+            boardId: updated.boardId,
+            listId: updated.listId,
+            position: updated.position,
+          },
         },
       },
     });
